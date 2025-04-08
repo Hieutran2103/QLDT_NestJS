@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id   String  @id @default(uuid())
+  name String  @unique // ('admin', 'teacher', 'student')
+
+  users          User[]
+  topicUsers     TopicUser[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id   String  @id @default(uuid())
+  name String  @unique // ('create_topic', 'delete_topic', 'create_report', 'comment_report', ...)
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id            String @id @default(uuid())
+  roleId        String
+  permissionId  String
+
+  role        Role        @relation(fields: [roleId], references: [id])
+  permission  Permission  @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId]) // Đảm bảo mỗi quyền chỉ có một lần trong mỗi role
+}
+
+model User {
+  id         String  @id @default(uuid())
+  name       String
+  email      String  @unique
+  password   String
+  roleId     String
+  createdAt  DateTime @default(now())
+
+  role        Role       @relation(fields: [roleId], references: [id])
+  topics      Topic[]    @relation("UserTopics")
+  topicUsers  TopicUser[]
+  reports     Report[]
+  comments    Comment[]
+  teacherTopics Topic[] @relation("TeacherTopics")
+}
+
+model Topic {
+  id          String  @id @default(uuid())
+  name        String
+  description String
+  creatorId   String
+  teacherId   String?
+  createdAt   DateTime @default(now())
+
+  creator   User  @relation("UserTopics", fields: [creatorId], references: [id])
+  teacher   User? @relation("TeacherTopics", fields: [teacherId], references: [id])
+  topicUsers TopicUser[]
+  reports    Report[]
+}
+
+model TopicUser {
+  id      String @id @default(uuid())
+  topicId String
+  userId  String
+  roleId  String
+
+  topic Topic @relation(fields: [topicId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  role  Role  @relation(fields: [roleId], references: [id])
+
+  @@unique([topicId, userId]) // Student chỉ có thể tham gia 1 lần vào mỗi topic
+}
+
+model Report {
+  id          String  @id @default(uuid())
+  topicId     String
+  userId      String
+  description String
+  filename    String // File trên cloud
+  status      Int    // 0: pending, 1: đạt, 2: không đạt
+  createdAt   DateTime @default(now())
+
+  topic    Topic  @relation(fields: [topicId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+  comments Comment[]
+}
+
+
+model Comment {
+  id        String   @id @default(uuid())
+  reportId  String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  report Report @relation(fields: [reportId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
