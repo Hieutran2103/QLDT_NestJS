@@ -41,7 +41,8 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.local
-.env-dev
+.src/shared/config/.env-dev
+
 # temp directory
 .temp
 .tmp
