@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import {
   BadRequestException,
   Inject,
@@ -14,6 +15,7 @@ import {
 import { PrismaService } from 'src/shared/services/prisma.service';
 import { Prisma } from '@prisma/client';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { RoleEnum } from 'src/shared/constants/role-constant';
 
 @Injectable()
 export class TopicService {
@@ -30,42 +32,6 @@ export class TopicService {
     if (keys.length) {
       await (this.cacheManager.stores as any).del(keys);
     }
-  }
-
-  //  thêm người vào topic với roleId từ user
-  private async addUserToTopic(topicId: string, userId: string) {
-    const user = await this.prismaService.user.findUnique({
-      where: { id: userId },
-      select: { roleId: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
-    await this.prismaService.topicUser.create({
-      data: {
-        topicId,
-        userId,
-        roleId: user.roleId, // Gán roleId từ user vào topic_users
-      },
-    });
-  }
-
-  //  thêm sinh viên vào topic
-  private async addStudentsToTopic(
-    topicId: string,
-    students: { id: string; roleId: string }[],
-  ) {
-    const topicUsersData = students.map((student) => ({
-      topicId,
-      userId: student.id,
-      roleId: student.roleId, // Gán roleId từ user vào topic_users
-    }));
-
-    await this.prismaService.topicUser.createMany({
-      data: topicUsersData,
-    });
   }
 
   // cập nhật sinh viên trong topic
@@ -140,6 +106,42 @@ export class TopicService {
     if (exists) throw new BadRequestException('Topic name already exists');
   }
 
+  //  thêm người vào topic với roleId từ user
+  private async addUserToTopic(topicId: string, userId: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { roleId: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    await this.prismaService.topicUser.create({
+      data: {
+        topicId,
+        userId,
+        roleId: user.roleId, // Gán roleId từ user vào topic_users
+      },
+    });
+  }
+
+  //  thêm sinh viên vào topic
+  private async addStudentsToTopic(
+    topicId: string,
+    students: { id: string; roleId: string }[],
+  ) {
+    const topicUsersData = students.map((student) => ({
+      topicId,
+      userId: student.id,
+      roleId: student.roleId, // Gán roleId từ user vào topic_users
+    }));
+
+    await this.prismaService.topicUser.createMany({
+      data: topicUsersData,
+    });
+  }
+
   // tạo topic mới
   async create(
     createTopicDto: CreateTopicDto,
@@ -176,8 +178,8 @@ export class TopicService {
 
       const roleName = creatorRole.name;
 
-      // Kiểm tra xem teacherId có hợp lệ không (nếu admin)
-      if (roleName === 'admin') {
+      // Kiểm tra xem teacherId có hợp lệ không (nếu là admin)
+      if (roleName === RoleEnum.ADMIN) {
         if (!teacherId) {
           throw new BadRequestException(
             'Teacher ID must be provided for admin',
@@ -200,7 +202,6 @@ export class TopicService {
         where: { id: { in: studentIds } },
         select: { id: true, roleId: true },
       });
-
       if (students.length !== studentIds.length) {
         throw new BadRequestException('One or more student IDs are invalid');
       }
@@ -234,7 +235,7 @@ export class TopicService {
     }
   }
 
-  // Phương thức lấy tất cả các topic
+  //  lấy tất cả các topic
   async findAll(query: FindAllTopicsDto) {
     try {
       const { page = 1, limit = 10, search, creatorId, teacherId } = query;
@@ -247,7 +248,7 @@ export class TopicService {
       const cached = await this.cacheManager.get(cacheKey);
 
       if (cached) {
-        console.log(' Returning topics from Redis cache');
+        // console.log(' Returning topics from Redis cache');
         return cached;
       }
 
@@ -300,117 +301,129 @@ export class TopicService {
     }
   }
 
-  // Phương thức lấy tất cả các topic mà user đã tham gia
+  // lấy tất cả các topic mà user đã tham gia
   async findAllTopicsEnrolled(userId: string, query: FindAllTopicsEnRolledDto) {
-    const { page = 1, limit = 10, search = '' } = query;
-    const skip = (page - 1) * limit;
+    try {
+      const { page = 1, limit = 10, search = '' } = query;
+      const skip = (page - 1) * limit;
 
-    const cacheKey = `enrolled_topics:${userId}:${page}:${limit}:${search}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) {
-      console.log('Returning enrolled topics from cache');
-      return cached;
-    }
+      const cacheKey = `enrolled_topics:${userId}:${page}:${limit}:${search}`;
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) {
+        // console.log('Returning enrolled topics from cache');
+        return cached;
+      }
 
-    // 1. Lấy danh sách topicId mà user đã tham gia
-    const topicUserList = await this.prismaService.topicUser.findMany({
-      where: { userId },
-      select: { topicId: true },
-    });
+      // 1. Lấy danh sách topicId mà user đã tham gia
+      const topicUserList = await this.prismaService.topicUser.findMany({
+        where: { userId },
+        select: { topicId: true },
+      });
 
-    const topicIds = topicUserList.map((item) => item.topicId);
+      const topicIds = topicUserList.map((item) => item.topicId);
 
-    if (topicIds.length === 0) {
-      return {
-        data: [],
-        totalPage: 0,
+      if (topicIds.length === 0) {
+        return {
+          data: [],
+          totalPage: 0,
+          currentPage: page,
+          pageSize: limit,
+          totalItems: 0,
+        };
+      }
+
+      const whereCondition: Prisma.TopicWhereInput = {
+        id: { in: topicIds },
+        name: search
+          ? {
+              contains: search,
+              mode: Prisma.QueryMode.insensitive,
+            }
+          : undefined,
+      };
+
+      const [topics, totalItems] = await this.prismaService.$transaction([
+        this.prismaService.topic.findMany({
+          skip,
+          take: limit,
+          where: whereCondition,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            creator: { select: { id: true, name: true } },
+            teacher: { select: { id: true, name: true } },
+          },
+        }),
+        this.prismaService.topic.count({
+          where: whereCondition,
+        }),
+      ]);
+
+      const totalPage = Math.ceil(totalItems / limit);
+
+      const result = {
+        data: topics,
+        totalPage,
         currentPage: page,
         pageSize: limit,
-        totalItems: 0,
+        totalItems,
       };
+
+      await this.cacheManager.set(cacheKey, result, 60 * 10); // cache 10 phút
+
+      return result;
+    } catch (error) {
+      throw new BadRequestException(
+        'Error fetching enrolled topics: ' + error.message,
+      );
     }
-
-    const whereCondition: Prisma.TopicWhereInput = {
-      id: { in: topicIds },
-      name: search
-        ? {
-            contains: search,
-            mode: Prisma.QueryMode.insensitive,
-          }
-        : undefined,
-    };
-
-    const [topics, totalItems] = await this.prismaService.$transaction([
-      this.prismaService.topic.findMany({
-        skip,
-        take: limit,
-        where: whereCondition,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          creator: { select: { id: true, name: true } },
-          teacher: { select: { id: true, name: true } },
-        },
-      }),
-      this.prismaService.topic.count({
-        where: whereCondition,
-      }),
-    ]);
-
-    const totalPage = Math.ceil(totalItems / limit);
-
-    const result = {
-      data: topics,
-      totalPage,
-      currentPage: page,
-      pageSize: limit,
-      totalItems,
-    };
-
-    await this.cacheManager.set(cacheKey, result, 60 * 10); // cache 10 phút
-
-    return result;
   }
 
   // cập nhật topic
   async editTopic(topicId: string, updateDto: UpdateTopicDto) {
-    const { name, description, teacherId, studentIds } = updateDto;
+    try {
+      const { name, description, teacherId, studentIds } = updateDto;
 
-    const topic = await this.getTopicOrFail(topicId);
+      const topic = await this.getTopicOrFail(topicId);
 
-    // Chỉ cập nhật name/description/teacherId nếu được truyền vào
-    const updateData: any = {};
-    if (name && name !== topic.name) {
-      await this.ensureUniqueName(name, topicId);
-      updateData.name = name;
+      // Chỉ cập nhật name/description/teacherId nếu được truyền vào
+      const updateData: any = {};
+      if (name && name !== topic.name) {
+        await this.ensureUniqueName(name, topicId);
+        updateData.name = name;
+      }
+      if (description !== undefined) {
+        updateData.description = description;
+      }
+      if (teacherId && teacherId !== topic.teacherId) {
+        updateData.teacherId = teacherId;
+      }
+
+      const updatedTopic = await this.prismaService.topic.update({
+        where: { id: topicId },
+        data: updateData,
+      });
+
+      // Chỉ xử lý nếu studentIds được truyền vào
+      if (Array.isArray(studentIds)) {
+        await this.updateStudentsInTopic(topicId, topic.teacherId, studentIds);
+      }
+
+      // Chỉ xử lý nếu teacherId được truyền vào và khác với cũ
+      if (teacherId && teacherId !== topic.teacherId) {
+        await this.updateTeacherInTopic(topicId, topic.teacherId, teacherId);
+      }
+
+      await Promise.all([
+        this.deleteCacheByPrefix(`enrolled_topics:`),
+        this.deleteCacheByPrefix('topic:'),
+      ]);
+
+      return updatedTopic;
+    } catch (error) {
+      throw new BadRequestException(
+        'Error fetching enrolled topics: ' + error.message,
+      );
     }
-    if (description !== undefined) {
-      updateData.description = description;
-    }
-    if (teacherId && teacherId !== topic.teacherId) {
-      updateData.teacherId = teacherId;
-    }
-
-    const updatedTopic = await this.prismaService.topic.update({
-      where: { id: topicId },
-      data: updateData,
-    });
-
-    // Chỉ xử lý nếu studentIds được truyền vào
-    if (Array.isArray(studentIds)) {
-      await this.updateStudentsInTopic(topicId, topic.teacherId, studentIds);
-    }
-
-    // Chỉ xử lý nếu teacherId được truyền vào và khác với cũ
-    if (teacherId && teacherId !== topic.teacherId) {
-      await this.updateTeacherInTopic(topicId, topic.teacherId, teacherId);
-    }
-
-    await Promise.all([
-      this.deleteCacheByPrefix(`enrolled_topics:`),
-      this.deleteCacheByPrefix('topic:'),
-    ]);
-
-    return updatedTopic;
   }
 
   // xóa topic
@@ -424,7 +437,7 @@ export class TopicService {
         // },
       });
 
-      console.log(topic);
+      // console.log(topic);
       if (!topic) {
         throw new NotFoundException('Topic not found');
       }

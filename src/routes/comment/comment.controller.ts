@@ -1,34 +1,58 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Req,
+} from '@nestjs/common';
 import { CommentService } from './comment.service';
-import { CreateCommentDto } from './dto/create-comment.dto';
-import { UpdateCommentDto } from './dto/update-comment.dto';
+import { CreateCommentDto, UpdateCommentDto } from './dto/create-comment.dto';
+import { Auth } from 'src/shared/decorators/auth.decorator';
+import { Request } from 'express';
+import { REQUEST_USER_KEY } from 'src/shared/constants/auth-constant';
 
 @Controller('comment')
 export class CommentController {
   constructor(private readonly commentService: CommentService) {}
+  // comment.controller.ts
 
-  @Post()
-  create(@Body() createCommentDto: CreateCommentDto) {
-    return this.commentService.create(createCommentDto);
+  @Auth('create_comment')
+  @Post('/:reportId')
+  create(
+    @Param('reportId') reportId: string,
+    @Req() request: Request,
+    @Body() createCommentDto: CreateCommentDto,
+  ) {
+    const userId = request[REQUEST_USER_KEY].id as string;
+    return this.commentService.create(reportId, userId, createCommentDto);
   }
 
-  @Get()
-  findAll() {
-    return this.commentService.findAll();
+  @Auth('get_comment')
+  @Get('/:reportId')
+  findAll(@Param('reportId') reportId: string, @Req() request: Request) {
+    const userId = request[REQUEST_USER_KEY].id as string;
+    return this.commentService.findAll(reportId, userId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.commentService.findOne(+id);
+  @Auth('edit_comment')
+  @Patch(':commentId')
+  update(
+    @Param('commentId') commentId: string,
+    @Body() updateCommentDto: UpdateCommentDto,
+    @Req() request: Request,
+  ) {
+    const userId = request[REQUEST_USER_KEY].id as string;
+    return this.commentService.update(commentId, updateCommentDto, userId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCommentDto: UpdateCommentDto) {
-    return this.commentService.update(+id, updateCommentDto);
-  }
+  @Auth('delete_comment')
+  @Delete(':commentId')
+  remove(@Param('commentId') commentId: string, @Req() request: Request) {
+    const userId = request[REQUEST_USER_KEY].id as string;
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.commentService.remove(+id);
+    return this.commentService.remove(commentId, userId);
   }
 }

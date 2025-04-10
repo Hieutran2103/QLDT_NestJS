@@ -86,6 +86,9 @@ async function main() {
     { name: 'edit_report_in_topic' },
     { name: 'create_comment' },
     { name: 'get_comment' },
+    { name: 'delete_report_in_topic' },
+    { name: 'edit_comment' },
+    { name: 'delete_comment' },
   ];
 
   await prisma.permission.createMany({
@@ -141,7 +144,17 @@ async function main() {
       roleId: teacherRoleId,
       permissionId: getPermissionId('edit_report_in_topic'),
     },
+    {
+      roleId: teacherRoleId,
+      permissionId: getPermissionId('delete_report_in_topic'),
+    },
+    {
+      roleId: studentRoleId,
+      permissionId: getPermissionId('edit_report_in_topic'),
+    },
     { roleId: teacherRoleId, permissionId: getPermissionId('create_comment') },
+    { roleId: teacherRoleId, permissionId: getPermissionId('edit_comment') },
+    { roleId: teacherRoleId, permissionId: getPermissionId('delete_comment') },
     { roleId: teacherRoleId, permissionId: getPermissionId('get_comment') },
 
     // Student permissions
@@ -156,10 +169,16 @@ async function main() {
     },
     {
       roleId: studentRoleId,
+      permissionId: getPermissionId('delete_report_in_topic'),
+    },
+    {
+      roleId: studentRoleId,
       permissionId: getPermissionId('create_report_in_topic'),
     },
     { roleId: studentRoleId, permissionId: getPermissionId('create_comment') },
     { roleId: studentRoleId, permissionId: getPermissionId('get_comment') },
+    { roleId: studentRoleId, permissionId: getPermissionId('edit_comment') },
+    { roleId: studentRoleId, permissionId: getPermissionId('delete_comment') },
   ];
 
   await prisma.rolePermission.createMany({
@@ -181,11 +200,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-// main()
-//   .catch((e) => {
-//     console.error('Seeding error:', e);
-//     process.exit(1);
-//   })
-//   .finally(async () => {
-//     await prisma.$disconnect();
-//   });

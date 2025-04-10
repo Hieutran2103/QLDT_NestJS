@@ -41,11 +41,9 @@ export class AuthController {
   @UploadFileInterceptor()
   async registerMany(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('Vui lòng upload file Excel');
+      throw new BadRequestException('Please upload file Excel');
     }
-
     const filePath = file.path;
-
     try {
       const users = this.authService.parseExcel(filePath);
       return this.authService.registerManyUser(users);

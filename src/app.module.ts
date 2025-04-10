@@ -11,15 +11,21 @@ import { ConfigModule } from '@nestjs/config';
 import * as path from 'path';
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      envFilePath: path.resolve(
+        __dirname,
+        '..',
+        'shared',
+        'configs',
+        '.env-dev',
+      ),
+      isGlobal: true,
+    }),
     SharedModule,
     AuthModule,
     CommentModule,
     ReportModule,
     TopicModule,
-    ConfigModule.forRoot({
-      envFilePath: path.resolve(__dirname, 'shared/configs/.env-dev'),
-      isGlobal: true,
-    }),
   ],
   controllers: [AppController],
   providers: [

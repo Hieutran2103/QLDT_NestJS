@@ -19,10 +19,12 @@ export class TokenService {
     const accessTokenExpiresIn = this.configService.get<string>(
       'ACCESS_JWT_TOKEN_EXPIRES_IN',
     );
+    // console.log(this.configService);
     const accessTokenSecret =
       this.configService.get<string>('ACCESS_JWT_SECRET');
 
-    console.log(accessTokenSecret);
+    // console.log(accessTokenSecret);
+
     return this.jwtService.sign(payload, {
       expiresIn: accessTokenExpiresIn,
       secret: accessTokenSecret,

@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   UnauthorizedException,
-  UnprocessableEntityException,
+  // UnprocessableEntityException,
 } from '@nestjs/common';
 import {
   BulkRegisterDto,
@@ -48,7 +48,7 @@ export class AuthService {
     });
 
     if (!data.length) {
-      throw new BadRequestException('File Excel không có dữ liệu');
+      throw new BadRequestException('File Excel have not data');
     }
 
     const users = plainToInstance(BulkRegisterDto, { users: data }).users;
@@ -57,7 +57,7 @@ export class AuthService {
     users.forEach((user, index) => {
       if (seenEmails.has(user.email)) {
         throw new BadRequestException(
-          `Dòng ${index + 2}: Email ${user.email} bị trùng`,
+          `Row ${index + 2}: The email address ${user.email} is already in use`,
         );
       }
       seenEmails.add(user.email);
@@ -102,7 +102,7 @@ export class AuthService {
     const newUsers = users.filter((user) => !existingEmails.has(user.email));
 
     if (!newUsers.length) {
-      throw new BadRequestException('Tất cả email trong file đã tồn tại');
+      throw new BadRequestException('All emails in the file already exist.');
     }
 
     // Hash password & lưu vào DB
@@ -118,7 +118,7 @@ export class AuthService {
     });
 
     return {
-      message: `Đã tạo thành công ${createdUsers.count} user`,
+      message: `${createdUsers.count} users have been created successfully.`,
       total: createdUsers.count,
     };
   }
@@ -128,24 +128,8 @@ export class AuthService {
       where: { email: loginUserDto.email },
     });
 
-    console.log(user);
-
     if (!user) {
       throw new UnauthorizedException('Account does not exist');
-    }
-
-    const isPasswordValid = await this.hashingService.compareHash(
-      loginUserDto.password,
-      user.password,
-    );
-
-    if (!isPasswordValid) {
-      throw new UnprocessableEntityException([
-        {
-          field: 'password',
-          error: 'Password is incorrect',
-        },
-      ]);
     }
 
     return this.generateTokens({
