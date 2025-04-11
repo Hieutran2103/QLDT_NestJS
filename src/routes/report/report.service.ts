@@ -17,6 +17,7 @@ import { S3Service } from 'src/shared/s3/s3.service';
 import { Prisma } from '@prisma/client';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import { RoleEnum } from 'src/shared/constants/role-constant';
+import { KeyReport } from 'src/shared/constants/key-cache.constant';
 @Injectable()
 export class ReportService {
   constructor(
@@ -65,17 +66,18 @@ export class ReportService {
         throw new BadRequestException('Missing uploaded file URL.');
       }
 
-      const report = await this.prisma.report.create({
-        data: {
-          topicId,
-          userId,
-          description: createReportDto.description || '',
-          filename: createReportDto.fileUrl,
-          status: 0,
-        },
-      });
-
-      // await this.deleteCacheByPrefix(`report:${topicId}`);
+      const [report] = await Promise.all([
+        this.prisma.report.create({
+          data: {
+            topicId,
+            userId,
+            description: createReportDto.description || '',
+            filename: createReportDto.fileUrl,
+            status: 0,
+          },
+        }),
+        this.deleteCacheByPrefix(KeyReport.REPORT),
+      ]);
 
       return report;
     } catch (error) {
@@ -105,13 +107,17 @@ export class ReportService {
       ...(status !== undefined ? { status: Number(status) } : {}),
     };
 
-    // const cacheKey = `report:${topicId}:${userId}:${user.role.name}:${page}:${limit}:${status || ''}`;
-
-    // const cached = await this.cacheManager.get(cacheKey);
-    // if (cached) {
-    //   console.log(' Returning reports from cache');
-    //   return cached;
-    // }
+    const cached = (await this.cacheManager.get(KeyReport.REPORT)) as {
+      currentPage?: number;
+    };
+    if (cached && cached.currentPage !== undefined) {
+      if (page !== cached.currentPage) {
+        await this.deleteCacheByPrefix(KeyReport.REPORT);
+      } else {
+        console.log('Returning topics from cache');
+        return cached;
+      }
+    }
 
     // Nếu không phải admin, phải check tham gia topic
     if (!isAdmin) {
@@ -141,7 +147,7 @@ export class ReportService {
       totalItems,
     };
 
-    // await this.cacheManager.set(cacheKey, result, 60 * 1); // cache 1p
+    await this.cacheManager.set(KeyReport.REPORT, result, 50000);
 
     return result;
   }
@@ -173,10 +179,13 @@ export class ReportService {
       if (user.role.name === RoleEnum.TEACHER) {
         // Kiểm tra xem giáo viên có tham gia topic không
 
-        return this.prisma.report.update({
-          where: { id },
-          data: updateReportDto,
-        });
+        return Promise.all([
+          await this.deleteCacheByPrefix(KeyReport.REPORT),
+          await this.prisma.report.update({
+            where: { id },
+            data: updateReportDto,
+          }),
+        ]);
       }
 
       // Sinh viên chỉ được sửa nếu là chủ report
@@ -198,13 +207,17 @@ export class ReportService {
 
         // Chỉ cho phép sửa filename và description
         const { filename, description } = updateReportDto;
-        return this.prisma.report.update({
-          where: { id },
-          data: {
-            filename,
-            description,
-          },
-        });
+
+        return Promise.all([
+          await this.deleteCacheByPrefix(KeyReport.REPORT),
+          await this.prisma.report.update({
+            where: { id },
+            data: {
+              filename,
+              description,
+            },
+          }),
+        ]);
       }
     } catch (error) {
       throw new BadRequestException(error.message);
@@ -247,7 +260,11 @@ export class ReportService {
           );
         }
 
-        await this.prisma.report.delete({ where: { id } });
+        await Promise.all([
+          await this.deleteCacheByPrefix(KeyReport.REPORT),
+          await this.prisma.report.delete({ where: { id } }),
+        ]);
+
         return { message: 'Report deleted successfully.' };
       }
     } catch (error) {

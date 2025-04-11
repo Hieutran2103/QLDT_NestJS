@@ -41,8 +41,11 @@ export class AuthService {
   }
 
   parseExcel(filePath: string): RegisterExcelDto[] {
+    //  xlsx để đọc tệp Excel từ đường dẫn filePath
     const workbook = xlsx.readFile(filePath);
+    // Lấy tên sheet đầu tiên trong workbook
     const sheetName = workbook.SheetNames[0];
+    //chuyển dữ liệu từ trang tính đã chọn thành một mảng các đối tượng JSON
     const data: any[] = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
       defval: null,
     });
@@ -50,9 +53,10 @@ export class AuthService {
     if (!data.length) {
       throw new BadRequestException('File Excel have not data');
     }
-
+    // Dữ liệu data chuyển thành các đối tượng BulkRegisterDto thông qua phương thức plainToInstance.
     const users = plainToInstance(BulkRegisterDto, { users: data }).users;
 
+    //Set dùng để theo dõi các email đã gặp trong mảng users
     const seenEmails = new Set();
     users.forEach((user, index) => {
       if (seenEmails.has(user.email)) {

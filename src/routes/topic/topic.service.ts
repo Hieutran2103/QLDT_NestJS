@@ -16,6 +16,7 @@ import { PrismaService } from 'src/shared/services/prisma.service';
 import { Prisma } from '@prisma/client';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import { RoleEnum } from 'src/shared/constants/role-constant';
+import { KeyTopic } from 'src/shared/constants/key-cache.constant';
 
 @Injectable()
 export class TopicService {
@@ -26,12 +27,7 @@ export class TopicService {
 
   //  xóa tất cả các cache có prefix là prefix được truyền vào
   private async deleteCacheByPrefix(prefix: string) {
-    const keys: string[] = await (this.cacheManager.stores as any).keys(
-      `${prefix}*`,
-    );
-    if (keys.length) {
-      await (this.cacheManager.stores as any).del(keys);
-    }
+    await this.cacheManager.del(prefix);
   }
 
   // cập nhật sinh viên trong topic
@@ -224,9 +220,9 @@ export class TopicService {
         ),
         // Thêm sinh viên vào topic
         this.addStudentsToTopic(newTopic.id, students),
-        // Xóa cache liên quan đến topic
-        this.deleteCacheByPrefix(`enrolled_topics:`),
-        this.deleteCacheByPrefix('topic:'),
+        // Xóa cache
+        this.deleteCacheByPrefix(KeyTopic.TOPIC),
+        this.deleteCacheByPrefix(KeyTopic.ENROLLED_TOPIC),
       ]);
 
       return newTopic;
@@ -241,18 +237,21 @@ export class TopicService {
       const { page = 1, limit = 10, search, creatorId, teacherId } = query;
       const skip = (page - 1) * limit;
 
-      // Tạo cache key duy nhất
-      const cacheKey = `topic:${page}:${limit}:${search || ''}:${creatorId || ''}:${teacherId || ''}`;
-
       // Kiểm tra cache
-      const cached = await this.cacheManager.get(cacheKey);
+      const cached = (await this.cacheManager.get(KeyTopic.TOPIC)) as {
+        currentPage?: number;
+      };
 
-      if (cached) {
-        // console.log(' Returning topics from Redis cache');
-        return cached;
+      // console.log(cached);
+      if (cached && cached.currentPage !== undefined) {
+        if (page !== cached.currentPage) {
+          await this.deleteCacheByPrefix(KeyTopic.TOPIC);
+        } else {
+          console.log('Returning topics from cache');
+          return cached;
+        }
       }
 
-      // Điều kiện tìm kiếm
       const whereCondition: Prisma.TopicWhereInput = {
         name: search
           ? {
@@ -293,7 +292,7 @@ export class TopicService {
       };
 
       // Lưu vào Redis cache
-      await this.cacheManager.set(cacheKey, result, 60 * 10); // cache trong 10 phút
+      await this.cacheManager.set(KeyTopic.TOPIC, result, 50000);
 
       return result;
     } catch (error) {
@@ -307,11 +306,17 @@ export class TopicService {
       const { page = 1, limit = 10, search = '' } = query;
       const skip = (page - 1) * limit;
 
-      const cacheKey = `enrolled_topics:${userId}:${page}:${limit}:${search}`;
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        // console.log('Returning enrolled topics from cache');
-        return cached;
+      const cached = (await this.cacheManager.get(KeyTopic.ENROLLED_TOPIC)) as {
+        currentPage?: number;
+      };
+
+      if (cached && cached.currentPage !== undefined) {
+        if (page !== cached.currentPage) {
+          await this.deleteCacheByPrefix(KeyTopic.TOPIC);
+        } else {
+          console.log('Returning topics from cache');
+          return cached;
+        }
       }
 
       // 1. Lấy danh sách topicId mà user đã tham gia
@@ -332,12 +337,14 @@ export class TopicService {
         };
       }
 
+      //
       const whereCondition: Prisma.TopicWhereInput = {
         id: { in: topicIds },
+
         name: search
           ? {
               contains: search,
-              mode: Prisma.QueryMode.insensitive,
+              mode: Prisma.QueryMode.insensitive, // Tìm kiếm không phân biệt chữ hoa chữ thường
             }
           : undefined,
       };
@@ -347,7 +354,7 @@ export class TopicService {
           skip,
           take: limit,
           where: whereCondition,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'desc' }, // Sắp xếp theo ngày tạo mới nhất
           include: {
             creator: { select: { id: true, name: true } },
             teacher: { select: { id: true, name: true } },
@@ -368,7 +375,7 @@ export class TopicService {
         totalItems,
       };
 
-      await this.cacheManager.set(cacheKey, result, 60 * 10); // cache 10 phút
+      await this.cacheManager.set(KeyTopic.ENROLLED_TOPIC, result, 50000);
 
       return result;
     } catch (error) {
@@ -414,8 +421,8 @@ export class TopicService {
       }
 
       await Promise.all([
-        this.deleteCacheByPrefix(`enrolled_topics:`),
-        this.deleteCacheByPrefix('topic:'),
+        this.deleteCacheByPrefix(`enrolled_topics`),
+        this.deleteCacheByPrefix('topic'),
       ]);
 
       return updatedTopic;

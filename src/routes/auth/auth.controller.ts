@@ -12,10 +12,10 @@ import {
   RegisterUserDto,
   RegisterResDTO,
   LoginBodyDTO,
-  LoginResDTO,
-} from './dto';
+  // LoginResDTO,
+} from './dto/create-auth.dto';
 
-import { removeFile } from 'src/utils/multer.config';
+import { removeFile } from 'src/shared/utils/multer.config';
 import { Auth } from 'src/shared/decorators/auth.decorator';
 import { UploadFileInterceptor } from 'src/shared/decorators/upload-file.decorator';
 
@@ -25,7 +25,7 @@ export class AuthController {
 
   @Post('/login')
   async login(@Body() loginUserDto: LoginBodyDTO) {
-    return new LoginResDTO(await this.authService.login(loginUserDto));
+    return this.authService.login(loginUserDto);
   }
 
   @Auth('create_user')
@@ -38,6 +38,7 @@ export class AuthController {
 
   @Auth('create_many_user')
   @Post('/register/bulk')
+  //interceptor của nestJS giúp xử lý việc tải lên tệp tin
   @UploadFileInterceptor()
   async registerMany(@UploadedFile() file: Express.Multer.File) {
     if (!file) {

@@ -40,7 +40,7 @@ export class RegisterUserDto {
   name: string;
   @IsNotEmpty()
   @IsString()
-  roleId: string; // ID của role ('admin', 'teacher', 'student')
+  roleId: string; // id cua ('admin', 'teacher', 'student')
 }
 
 export class RegisterResDTO {
@@ -58,12 +58,12 @@ export class RegisterResDTO {
   }
 }
 
-export class LoginResDTO {
-  accessToken: string;
-  constructor(partial: Partial<LoginResDTO>) {
-    Object.assign(this, partial);
-  }
-}
+// export class LoginResDTO {
+//   accessToken: string;
+//   constructor(partial: Partial<LoginResDTO>) {
+//     Object.assign(this, partial);
+//   }
+// }
 
 //Excell
 
