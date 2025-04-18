@@ -1,5 +1,3 @@
-
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,97 +8,104 @@ datasource db {
 }
 
 model Role {
-  id   String  @id @default(uuid())
-  name String  @unique // ('admin', 'teacher', 'student')
+  id    String @id @default(uuid())
+  name  String @unique
 
-  users          User[]
-  topicUsers     TopicUser[]
+  users           User[]
   rolePermissions RolePermission[]
 }
 
 model Permission {
-  id   String  @id @default(uuid())
-  name String  @unique // ('create_topic', 'delete_topic', 'create_report', 'comment_report', ...)
+  id   String @id @default(uuid())
+  name String @unique
 
   rolePermissions RolePermission[]
 }
 
 model RolePermission {
-  id            String @id @default(uuid())
-  roleId        String
-  permissionId  String
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
 
-  role        Role        @relation(fields: [roleId], references: [id])
-  permission  Permission  @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
-  @@unique([roleId, permissionId]) // Đảm bảo mỗi quyền chỉ có một lần trong mỗi role
+  @@unique([roleId, permissionId])
 }
 
 model User {
-  id         String  @id @default(uuid())
+  id         String   @id @default(uuid())
   name       String
-  email      String  @unique
+  email      String   @unique
   password   String
   roleId     String
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  role        Role       @relation(fields: [roleId], references: [id])
-  topics      Topic[]    @relation("UserTopics")
-  topicUsers  TopicUser[]
-  reports     Report[]
-  comments    Comment[]
-  teacherTopics Topic[] @relation("TeacherTopics")
+  role          Role       @relation(fields: [roleId], references: [id])
+  topics        Topic[]    @relation("UserTopics")
+  teacherTopics Topic[]    @relation("TeacherTopics")
+  topicUsers    TopicUser[]
+  reports       Report[]
+  comments      Comment[]
 }
 
 model Topic {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String
   creatorId   String
   teacherId   String?
+  score       Float?   @default(0) // Điểm trên thang điểm 10
+  status      String   @default("inprocess") // inprocess, done.
+  action      String   @default("open") // open, close
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  creator   User  @relation("UserTopics", fields: [creatorId], references: [id])
-  teacher   User? @relation("TeacherTopics", fields: [teacherId], references: [id])
+  creator    User        @relation("UserTopics", fields: [creatorId], references: [id])
+  teacher    User?       @relation("TeacherTopics", fields: [teacherId], references: [id])
   topicUsers TopicUser[]
   reports    Report[]
+  comments   Comment[]
 }
 
 model TopicUser {
   id      String @id @default(uuid())
   topicId String
   userId  String
-  roleId  String
 
   topic Topic @relation(fields: [topicId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
-  role  Role  @relation(fields: [roleId], references: [id])
 
-  @@unique([topicId, userId]) // Student chỉ có thể tham gia 1 lần vào mỗi topic
+  @@unique([topicId, userId])
 }
 
 model Report {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   topicId     String
   userId      String
   description String
-  filename    String // File trên cloud
-  status      Int    // 0: pending, 1: đạt, 2: không đạt
+  filename    String
+  status      Int
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  topic    Topic  @relation(fields: [topicId], references: [id])
-  user     User   @relation(fields: [userId], references: [id])
-  comments Comment[]
+  topic Topic @relation(fields: [topicId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
 }
-
 
 model Comment {
   id        String   @id @default(uuid())
-  reportId  String
+  topicId   String
   userId    String
   content   String
+  status    Int      @default(0) // 0: unresolved, 1: resolved
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  parentId  String?
 
-  report Report @relation(fields: [reportId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  topic   Topic    @relation(fields: [topicId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  parent  Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
 }

@@ -3,12 +3,16 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { SharedModule } from './shared/shared.module';
-import { AuthModule } from './routes/auth/auth.module';
-import { CommentModule } from './routes/comment/comment.module';
-import { ReportModule } from './routes/report/report.module';
-import { TopicModule } from './routes/topic/topic.module';
-import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './modules/auth/auth.module';
+import { CommentModule } from './modules/comment/comment.module';
+import { ReportModule } from './modules/report/report.module';
+import { TopicModule } from './modules/topic/topic.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
 import * as path from 'path';
+import { RoleModule } from './modules/role/role.module';
+import { PermissionModule } from './modules/permission/permission.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -21,11 +25,23 @@ import * as path from 'path';
       ),
       isGlobal: true,
     }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        redis: {
+          host: configService.get('REDIS_HOST') || 'localhost',
+          port: parseInt(configService.get('REDIS_PORT') || '6379', 10),
+        },
+      }),
+    }),
     SharedModule,
     AuthModule,
     CommentModule,
     ReportModule,
     TopicModule,
+    RoleModule,
+    PermissionModule,
   ],
   controllers: [AppController],
   providers: [

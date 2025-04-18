@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-// /* eslint-disable @typescript-eslint/no-unused-vars */
-// /* eslint-disable @typescript-eslint/no-misused-promises */
-// import { PrismaClient } from '@prisma/client';
 // import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 
-// const prisma = new PrismaClient();
+const prisma = new PrismaClient();
 
 // async function main() {
 //   console.log('Seeding database...');
@@ -61,15 +59,12 @@
 //   .finally(async () => {
 //     await prisma.$disconnect();
 //   });
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 async function main() {
   // ID các role đã có sẵn
-  const adminRoleId = '69e094d3-4681-4054-b620-9940a58acc29';
-  const teacherRoleId = '4ee9c441-1ae5-40d1-b663-050f147c8dba';
-  const studentRoleId = 'ff79993e-0959-4f3a-a065-be9e2f41f9a0';
+  const adminRoleId = 'f274ad1c-574d-47cd-b8dc-8920652e3cb9';
+  const teacherRoleId = '669bef66-9139-4379-b8d7-2e2aea1dc79c';
+  const studentRoleId = 'e146df97-84dd-4192-bed6-9e0d13661048';
 
   // Thêm Permissions
   const permissionsData = [
@@ -77,6 +72,7 @@ async function main() {
     { name: 'create_many_user' },
     { name: 'get_all_user' },
     { name: 'get_all_topic' },
+    { name: 'get_topic_by_id' },
     { name: 'get_all_topics_enrolled' },
     { name: 'create_topic' },
     { name: 'edit_topic' },
@@ -89,6 +85,8 @@ async function main() {
     { name: 'delete_report_in_topic' },
     { name: 'edit_comment' },
     { name: 'delete_comment' },
+    { name: 'manage_roles' },
+    { name: 'manage_permissions' },
   ];
 
   await prisma.permission.createMany({
@@ -110,11 +108,17 @@ async function main() {
     { roleId: adminRoleId, permissionId: getPermissionId('create_many_user') },
     { roleId: adminRoleId, permissionId: getPermissionId('get_all_user') },
     { roleId: adminRoleId, permissionId: getPermissionId('get_all_topic') },
+    { roleId: adminRoleId, permissionId: getPermissionId('manage_roles') },
+    {
+      roleId: adminRoleId,
+      permissionId: getPermissionId('manage_permissions'),
+    },
     {
       roleId: adminRoleId,
       permissionId: getPermissionId('get_all_topics_enrolled'),
     },
     { roleId: adminRoleId, permissionId: getPermissionId('create_topic') },
+    { roleId: adminRoleId, permissionId: getPermissionId('get_topic_by_id') },
     { roleId: adminRoleId, permissionId: getPermissionId('edit_topic') },
     { roleId: adminRoleId, permissionId: getPermissionId('delete_topic') },
     {
@@ -130,6 +134,7 @@ async function main() {
       permissionId: getPermissionId('get_all_topics_enrolled'),
     },
     { roleId: teacherRoleId, permissionId: getPermissionId('create_topic') },
+    { roleId: teacherRoleId, permissionId: getPermissionId('get_topic_by_id') },
     { roleId: teacherRoleId, permissionId: getPermissionId('edit_topic') },
     { roleId: teacherRoleId, permissionId: getPermissionId('delete_topic') },
     {
@@ -153,12 +158,14 @@ async function main() {
       permissionId: getPermissionId('edit_report_in_topic'),
     },
     { roleId: teacherRoleId, permissionId: getPermissionId('create_comment') },
+
     { roleId: teacherRoleId, permissionId: getPermissionId('edit_comment') },
     { roleId: teacherRoleId, permissionId: getPermissionId('delete_comment') },
     { roleId: teacherRoleId, permissionId: getPermissionId('get_comment') },
 
     // Student permissions
     { roleId: studentRoleId, permissionId: getPermissionId('get_all_topic') },
+    { roleId: studentRoleId, permissionId: getPermissionId('get_topic_by_id') },
     {
       roleId: studentRoleId,
       permissionId: getPermissionId('get_all_topics_enrolled'),

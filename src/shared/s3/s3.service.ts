@@ -82,7 +82,7 @@ export class S3Service {
         fs.unlinkSync(zipPath);
 
         console.log(
-          `✅ Word zipped from ${(file.buffer.length / 1024 / 1024).toFixed(
+          `Word zipped from ${(file.buffer.length / 1024 / 1024).toFixed(
             2,
           )}MB to ${(zippedBuffer.length / 1024 / 1024).toFixed(2)}MB`,
         );
