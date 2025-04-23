@@ -27,14 +27,32 @@ export class S3Service {
   ];
 
   constructor(private readonly configService: ConfigService) {
+    const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get<string>(
+      'AWS_SECRET_ACCESS_KEY',
+    );
+    const region = this.configService.get<string>('AWS_REGION');
+    const endpoint = this.configService.get<string>('AWS_ENDPOINT');
+
+    if (!accessKeyId || !secretAccessKey || !region || !endpoint) {
+      console.warn('AWS credentials or configuration missing or invalid');
+    }
+
+    // console.log(
+    //   '=================',
+    //   accessKeyId,
+    //   secretAccessKey,
+    //   region,
+    //   endpoint,
+    // );
+
     this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION'),
+      region,
       credentials: {
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID') || '',
-        secretAccessKey:
-          this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
       },
-      endpoint: this.configService.get<string>('AWS_ENDPOINT'),
+      endpoint,
       forcePathStyle: true,
     });
   }
@@ -100,6 +118,14 @@ export class S3Service {
   async uploadFile(
     file: Express.Multer.File,
   ): Promise<{ url: string; key: string }> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    if (!file.mimetype) {
+      throw new BadRequestException('File mimetype is missing');
+    }
+
     if (!this.allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(
         'Only .doc, .docx, and .pdf files are allowed',
@@ -107,10 +133,18 @@ export class S3Service {
     }
 
     const bucket = this.configService.get<string>('AWS_BUCKET_NAME');
+    if (!bucket) {
+      throw new InternalServerErrorException('S3 bucket configuration missing');
+    }
+
     const ext = extname(file.originalname);
     const rawFilename = file.originalname.replace(/\.[^.]+$/, '');
 
     let fileBuffer = file.buffer;
+    if (!fileBuffer) {
+      throw new BadRequestException('File buffer is missing');
+    }
+
     let contentType = file.mimetype;
     let finalExt = ext;
     let originalName = this.sanitizeFilename(rawFilename); // dùng tên file đã làm sạch
@@ -142,8 +176,20 @@ export class S3Service {
     try {
       await this.s3Client.send(command);
     } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Upload to S3 failed');
+      console.error('S3 upload error:', error);
+      if (error.name === 'InvalidAccessKeyId') {
+        throw new InternalServerErrorException(
+          'Invalid AWS credentials. Please check AWS configuration.',
+        );
+      } else if (error.name === 'NoSuchBucket') {
+        throw new InternalServerErrorException(
+          `Bucket "${bucket}" does not exist`,
+        );
+      } else {
+        throw new InternalServerErrorException(
+          `Upload to S3 failed: ${error.message}`,
+        );
+      }
     }
 
     const endpoint = this.configService.get<string>('AWS_ENDPOINT');

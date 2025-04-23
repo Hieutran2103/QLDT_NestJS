@@ -704,36 +704,56 @@ export class TopicService {
   // xóa topic
   async remove(id: string) {
     try {
-      // 1. Kiểm tra topic tồn tại
-      const topic = await this.prismaService.topic.findUnique({
-        where: { id },
-        // include: {
-        //   topicUsers: { select: { userId: true } }, // Lấy danh sách user đã join topic
-        // },
-      });
+      // Sử dụng transaction để đảm bảo tính nhất quán khi xóa topic
+      return await this.prismaService.$transaction(
+        async (tx) => {
+          // 1. Kiểm tra topic tồn tại
+          const topic = await tx.topic.findUnique({
+            where: { id },
+            include: {
+              reports: { select: { id: true } },
+            },
+          });
 
-      // console.log(topic);
-      if (!topic) {
-        throw new NotFoundException('Topic not found');
-      }
+          if (!topic) {
+            throw new NotFoundException('Topic not found');
+          }
 
-      //Xoá topic_user trước
-      await this.prismaService.topicUser.deleteMany({
-        where: { topicId: id },
-      });
+          // 2. Xóa các liên kết topic_user
+          await tx.topicUser.deleteMany({
+            where: { topicId: id },
+          });
 
-      await Promise.all([
-        //  Xoá topic
-        await this.prismaService.topic.delete({
-          where: { id },
-        }),
-        // xóa cache
-        this.deleteCacheByPrefix(`enrolled_topics:`),
-        this.deleteCacheByPrefix('topic:'),
-      ]);
+          // 3. Xóa các báo cáo thuộc topic này (nếu có)
+          if (topic.reports.length > 0) {
+            await tx.report.deleteMany({
+              where: { topicId: id },
+            });
+          }
 
-      return { message: 'Topic deleted successfully' };
+          // 4. Xóa topic
+          await tx.topic.delete({
+            where: { id },
+          });
+
+          // 5. Xóa cache
+          await this.deleteCacheByPrefix(`enrolled_topics:`);
+          await this.deleteCacheByPrefix('topic:');
+
+          return { message: 'Topic deleted successfully' };
+        },
+        {
+          // Mức cô lập RepeatableRead đủ cho việc xóa dữ liệu
+          // đảm bảo dữ liệu được đọc không bị thay đổi bởi các transaction khác
+          isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+          timeout: 5000, // 5 giây
+        },
+      );
     } catch (error) {
+      // Xử lý lỗi transaction
+      if (error.code === 'P2034') {
+        throw new BadRequestException('Transaction timeout.');
+      }
       throw new BadRequestException('Error deleting topic: ' + error.message);
     }
   }

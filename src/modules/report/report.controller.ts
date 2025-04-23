@@ -10,13 +10,10 @@ import {
   UploadedFile,
   UseInterceptors,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { ReportService } from './report.service';
-import {
-  CreateReportDto,
-  FindAllReportsDto,
-  UpdateReportDto,
-} from './dtos';
+import { CreateReportDto, FindAllReportsDto, UpdateReportDto } from './dtos';
 
 import { Auth } from 'src/shared/decorators/auth.decorator';
 import { Request } from 'express';
@@ -30,6 +27,9 @@ export class ReportController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
     return this.reportService.uploadFile(file);
   }
 
