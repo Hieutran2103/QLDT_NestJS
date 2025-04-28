@@ -25,7 +25,6 @@ export class TopicService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  //  xóa tất cả các cache có prefix là prefix được truyền vào
   private async deleteCacheByPrefix(prefix: string) {
     try {
       // Lấy Keyv store từ cache manager (là phần tử đầu tiên của mảng stores)
@@ -57,7 +56,6 @@ export class TopicService {
     }
   }
 
-  //  thêm người vào topic với roleId từ user
   private async addUserToTopic(topicId: string, userId: string) {
     const userExists = await this.prismaService.user.findUnique({
       where: { id: userId },
@@ -76,7 +74,6 @@ export class TopicService {
     });
   }
 
-  //  thêm sinh viên vào topic
   private async addStudentsToTopic(topicId: string, studentIds: string[]) {
     const topicUsersData = studentIds.map((studentId) => ({
       topicId,
@@ -88,7 +85,6 @@ export class TopicService {
     });
   }
 
-  // tạo topic mới
   async create(
     createTopicDto: CreateTopicDto,
     creatorId: string,
@@ -97,7 +93,7 @@ export class TopicService {
     try {
       const { name, description, teacherId, studentIds } = createTopicDto;
 
-      // Kiểm tra trùng tên topic (không phân biệt hoa thường)
+      // Check for duplicate topic names (case-insensitive)
       const existingTopic = await this.prismaService.topic.findFirst({
         where: { name },
       });
@@ -121,7 +117,7 @@ export class TopicService {
 
       const roleName = creatorRole.name;
 
-      // Nếu là admin thì cần có teacherId và kiểm tra teacher tồn tại
+      // If the user is an admin, ensure there is a teacherId and verify that the teacher exists.
       if (roleName === RoleEnum.ADMIN) {
         if (!teacherId) {
           throw new BadRequestException(
@@ -139,7 +135,7 @@ export class TopicService {
         }
       }
 
-      // Kiểm tra xem studentIds có hợp lệ không
+      //Check if the studentIds are valid.
       const students = await this.prismaService.user.findMany({
         where: { id: { in: studentIds } },
         select: { id: true },
@@ -149,7 +145,7 @@ export class TopicService {
         throw new BadRequestException('One or more student IDs are invalid');
       }
 
-      // Tạo topic
+      // create topic
       const newTopic = await this.prismaService.topic.create({
         data: {
           name,
@@ -159,7 +155,7 @@ export class TopicService {
         },
       });
 
-      // Thêm creator/teacher và students vào topic
+      // add creator/teacher and students to the topic
       await Promise.all([
         this.addUserToTopic(
           newTopic.id,
@@ -179,7 +175,6 @@ export class TopicService {
     }
   }
 
-  //  lấy tất cả các topic
   async findAll(query: FindAllTopicsDto) {
     try {
       const {
@@ -196,7 +191,7 @@ export class TopicService {
       } = query;
       const skip = (page - 1) * limit;
 
-      // Tạo cache key dựa trên tất cả các tham số tìm kiếm
+      // create a cache key based on all the search parameters.
       const cacheKey = `${KeyTopic.TOPIC}:${JSON.stringify({
         page,
         limit,
@@ -210,7 +205,7 @@ export class TopicService {
         endDate,
       })}`;
 
-      // Kiểm tra cache với key cụ thể
+      // check cache
       const cached = await this.cacheManager.get(cacheKey);
 
       if (cached) {
@@ -218,7 +213,7 @@ export class TopicService {
         return cached;
       }
 
-      // Xây dựng các điều kiện tìm kiếm
+      // Build the search conditions.
       const whereCondition: any = {
         name: search
           ? {
@@ -230,12 +225,12 @@ export class TopicService {
         teacherId: teacherId || undefined,
       };
 
-      // Thêm điều kiện tìm kiếm theo status
+      // add a search condition based on status.
       if (status) {
         whereCondition.status = status;
       }
 
-      // Thêm điều kiện tìm kiếm theo khoảng score
+      // add a search condition based on the score range
       if (minScore !== undefined || maxScore !== undefined) {
         whereCondition.score = {};
 
@@ -248,18 +243,17 @@ export class TopicService {
         }
       }
 
-      // Thêm điều kiện tìm kiếm theo khoảng thời gian
+      // add a search condition based on the time range.
       if (startDate || endDate) {
         whereCondition.createdAt = {};
 
         if (startDate) {
-          // đặt thời gian bắt đầu là vào đầu ngày
           // greater than or equal
           whereCondition.createdAt.gte = new Date(startDate);
         }
 
         if (endDate) {
-          // đặt thời gian kết thúc là vào cuối ngày
+          // Set the end time to the end of the day.
           // less than or equal
           const endDateTime = new Date(endDate);
           endDateTime.setHours(23, 59, 59);
@@ -295,8 +289,8 @@ export class TopicService {
         totalItems,
       };
 
-      // Lưu vào Redis cache với key cụ thể
-      await this.cacheManager.set(cacheKey, result, 50000);
+      // set cache
+      await this.cacheManager.set(cacheKey, result, 60000 * 10); // 10 minutes
 
       return result;
     } catch (error) {
@@ -306,7 +300,7 @@ export class TopicService {
 
   async findOneTopic(id: string, userId: string, roleId: string) {
     try {
-      // Lấy thông tin vai trò của người dùng
+      // get in4 role of user
       const userRole = await this.prismaService.role.findUnique({
         where: { id: roleId },
         select: { name: true },
@@ -316,7 +310,7 @@ export class TopicService {
         throw new BadRequestException('Invalid user role');
       }
 
-      // Kiểm tra xem topic có tồn tại không
+      // check topic exist
       const topic = await this.prismaService.topic.findUnique({
         where: { id },
         include: {
@@ -329,12 +323,13 @@ export class TopicService {
         throw new NotFoundException('Topic not found');
       }
 
-      // Kiểm tra quyền truy cập dựa trên vai trò
-      // Admin: Có thể xem tất cả các topic
-      // Giáo viên: Chỉ xem được topic mà họ tham gia
-      // Sinh viên: Chỉ xem được topic mà họ tham gia
+      // Check access based on role
+      // Admin: Can view all topics
+      // Teacher: Can only view topics they are participating in
+      // Student: Can only view topics they are participating in
+
       if (userRole.name !== RoleEnum.ADMIN) {
-        // Kiểm tra xem người dùng có tham gia topic không
+        // check user in topic
         const isUserInTopic = await this.prismaService.topicUser.findFirst({
           where: {
             topicId: id,
@@ -347,7 +342,7 @@ export class TopicService {
         }
       }
 
-      // Lấy danh sách người tham gia (không bao gồm giáo viên)
+      // Get list of participants excluding teachers
       const topicUsers = await this.prismaService.topicUser.findMany({
         where: {
           topicId: id,
@@ -366,7 +361,7 @@ export class TopicService {
 
       const students = topicUsers.map((tu) => tu.user);
 
-      // Trả về thông tin chi tiết topic và danh sách người tham gia
+      //  return the topic details and list of participants
       return {
         ...topic,
         students,
@@ -379,7 +374,6 @@ export class TopicService {
     }
   }
 
-  // lấy tất cả các topic mà user đã tham gia
   async findAllTopicsEnrolled(userId: string, query: FindAllTopicsEnRolledDto) {
     try {
       const {
@@ -394,8 +388,8 @@ export class TopicService {
       } = query;
       const skip = (page - 1) * limit;
 
-      // Tạo cache key dựa trên tất cả các tham số tìm kiếm và userId
-      const cacheKey = `${KeyTopic.ENROLLED_TOPIC}:${userId}:${JSON.stringify({
+      // create cache key
+      const cacheKey = `${KeyTopic.ENROLLED_TOPIC}:${JSON.stringify({
         page,
         limit,
         search,
@@ -406,7 +400,7 @@ export class TopicService {
         endDate,
       })}`;
 
-      // Kiểm tra cache với key cụ thể
+      // check cache
       const cached = await this.cacheManager.get(cacheKey);
 
       if (cached) {
@@ -414,7 +408,7 @@ export class TopicService {
         return cached;
       }
 
-      // 1. Lấy danh sách topicId mà user đã tham gia
+      // Get the list of topicIds that the user has participated in.
       const topicUserList = await this.prismaService.topicUser.findMany({
         where: { userId },
         select: { topicId: true },
@@ -432,23 +426,21 @@ export class TopicService {
         };
       }
 
-      // Xây dựng các điều kiện tìm kiếm
+      // Build the search conditions.
       const whereCondition: any = {
         id: { in: topicIds },
         name: search
           ? {
               contains: search,
-              mode: Prisma.QueryMode.insensitive, // Tìm kiếm không phân biệt chữ hoa chữ thường
+              mode: Prisma.QueryMode.insensitive, // Search case-insensitive.
             }
           : undefined,
       };
 
-      // Thêm điều kiện tìm kiếm theo status
       if (status) {
         whereCondition.status = status;
       }
 
-      // Thêm điều kiện tìm kiếm theo khoảng score
       if (minScore !== undefined || maxScore !== undefined) {
         whereCondition.score = {};
 
@@ -461,7 +453,6 @@ export class TopicService {
         }
       }
 
-      // Thêm điều kiện tìm kiếm theo khoảng thời gian
       if (startDate || endDate) {
         whereCondition.createdAt = {};
 
@@ -470,7 +461,6 @@ export class TopicService {
         }
 
         if (endDate) {
-          // Đặt thời gian kết thúc là cuối ngày
           const endDateTime = new Date(endDate);
           endDateTime.setHours(23, 59, 59, 999);
           whereCondition.createdAt.lte = endDateTime;
@@ -482,7 +472,7 @@ export class TopicService {
           skip,
           take: limit,
           where: whereCondition,
-          orderBy: { createdAt: 'desc' }, // Sắp xếp theo ngày tạo mới nhất
+          orderBy: { createdAt: 'desc' }, // Sort by the most recent creation date.
           include: {
             creator: { select: { id: true, name: true } },
             teacher: { select: { id: true, name: true } },
@@ -503,7 +493,7 @@ export class TopicService {
         totalItems,
       };
 
-      // Lưu vào Redis cache với key cụ thể
+      // set cache
       await this.cacheManager.set(cacheKey, result, 50000);
 
       return result;
@@ -514,7 +504,6 @@ export class TopicService {
     }
   }
 
-  // cập nhật topic
   async editTopic(topicId: string, updateDto: UpdateTopicDto, userId: string) {
     try {
       const {
@@ -527,8 +516,7 @@ export class TopicService {
         action,
       } = updateDto;
 
-      // Sử dụng transaction để đảm bảo tất cả thao tác cập nhật được xử lý như một đơn vị
-      // Điều này tránh trường hợp một phần thành công, phần khác thất bại
+      // Transaction
 
       return await this.prismaService.$transaction(
         async (tx) => {
@@ -543,10 +531,10 @@ export class TopicService {
             throw new BadRequestException('Topic not found');
           }
 
-          // Chỉ cập nhật name/description/teacherId nếu được truyền vào
+          // Only update name/description/teacherId if provided.
           const updateData: any = {};
           if (name && name !== topic.name) {
-            // Kiểm tra trùng tên topic
+            // Check for duplicate topic names.
             const existingTopic = await tx.topic.findFirst({
               where: {
                 name,
@@ -569,9 +557,9 @@ export class TopicService {
             updateData.teacherId = teacherId;
           }
 
-          // khi chấm điểm thì mình sẽ cho tự động status=done và action=close
+          // When scoring, automatically set status to 'done' and action to 'close'.
           if (score !== undefined) {
-            // Kiểm tra xem người dùng hiện tại có phải là giáo viên của topic này không
+            // Check if the current user is the teacher of this topic.
             if (topic.teacherId !== userId) {
               throw new BadRequestException(
                 'Only the teacher of this topic can set a score',
@@ -583,9 +571,9 @@ export class TopicService {
             updateData.action = 'close';
           }
 
-          // nếu status được cập nhật thành done thì cần có score không thì báo lỗi
+          // If the status is updated to done, a score must be provided
           if (status === 'done') {
-            // kiểm tra xem có score chưa (từ trước hoặc cập nhật hiện tại)
+            // Check if a score exists
             if (score === undefined && (topic as any).score === 0) {
               throw new BadRequestException(
                 'Cannot set status to done without a score',
@@ -593,34 +581,34 @@ export class TopicService {
             }
             updateData.status = status;
           } else if (status !== undefined) {
-            // Trường hợp status khác "done" thì cập nhật bình thường
+            // If the status is not 'done', update normally.
             updateData.status = status;
           }
 
-          //cho phép đặt action là close ngay cả khi không có score
+          //Allow setting action to 'close' even without a score.
           if (action !== undefined) {
             updateData.action = action;
           }
 
-          // Cập nhật thông tin topic
+          // Update topic information.
           const updatedTopic = await tx.topic.update({
             where: { id: topicId },
             data: updateData,
           });
 
-          // Xử lý cập nhật danh sách sinh viên nếu được cung cấp
+          // Handle updating the list of students if provided.
           if (Array.isArray(studentIds)) {
-            // Lấy danh sách user hiện tại trong topic
+            // Get the current list of students (excluding teachers)
             const currentUsers = await tx.topicUser.findMany({
               where: { topicId },
             });
 
-            // Lấy danh sách student hiện tại (bỏ qua teacher)
+            // Get the current list of students
             const currentStudentIds = currentUsers
               .filter((u) => u.userId !== topic.teacherId)
               .map((u) => u.userId);
 
-            // Xác định danh sách sinh viên cần thêm vào và xóa đi
+            // Identify the list of students to add and remove
             const toAdd = studentIds.filter(
               (id) => !currentStudentIds.includes(id),
             );
@@ -628,7 +616,7 @@ export class TopicService {
               (id) => !studentIds.includes(id),
             );
 
-            // Xóa sinh viên không còn trong danh sách
+            // Remove students no longer in the list.
             if (toRemove.length > 0) {
               await tx.topicUser.deleteMany({
                 where: {
@@ -638,7 +626,7 @@ export class TopicService {
               });
             }
 
-            // Thêm sinh viên mới vào topic
+            // Add new students to the topic.
             if (toAdd.length > 0) {
               const validStudents = await tx.user.findMany({
                 where: { id: { in: toAdd } },
@@ -658,16 +646,16 @@ export class TopicService {
             }
           }
 
-          // Xử lý cập nhật giáo viên nếu có thay đổi
+          // Handle updating the teacher if there are changes
           if (teacherId && teacherId !== topic.teacherId) {
-            // Xóa giáo viên cũ khỏi topic
+            // Remove the old teacher from the topic.
             if (topic.teacherId) {
               await tx.topicUser.deleteMany({
                 where: { topicId, userId: topic.teacherId },
               });
             }
 
-            // Thêm giáo viên mới vào topic
+            // Add the new teacher to the topic.
             await tx.topicUser.create({
               data: {
                 topicId,
@@ -676,21 +664,19 @@ export class TopicService {
             });
           }
 
-          // Xóa cache
+          // delete cache
           await this.deleteCacheByPrefix(KeyTopic.ENROLLED_TOPIC);
           await this.deleteCacheByPrefix(KeyTopic.TOPIC);
 
           return updatedTopic;
         },
         {
-          // Sử dụng mức cô lập Serializable để đảm bảo tính nhất quán cao nhất
-          // tránh các vấn đề khi nhiều người cùng cập nhật topic
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          timeout: 10000, // 10 giây
+          timeout: 10000, // 10 sec
         },
       );
     } catch (error) {
-      // Xử lý lỗi transaction
+      // error transaction
       if (error.code === 'P2034') {
         throw new BadRequestException(
           'Transaction timeout - too many concurrent updates.',
@@ -701,13 +687,12 @@ export class TopicService {
     }
   }
 
-  // xóa topic
   async remove(id: string) {
     try {
-      // Sử dụng transaction để đảm bảo tính nhất quán khi xóa topic
+      // transaction
       return await this.prismaService.$transaction(
         async (tx) => {
-          // 1. Kiểm tra topic tồn tại
+          //  check topic exist
           const topic = await tx.topic.findUnique({
             where: { id },
             include: {
@@ -719,38 +704,36 @@ export class TopicService {
             throw new NotFoundException('Topic not found');
           }
 
-          // 2. Xóa các liên kết topic_user
+          // Delete the topic_user associations.
           await tx.topicUser.deleteMany({
             where: { topicId: id },
           });
 
-          // 3. Xóa các báo cáo thuộc topic này (nếu có)
+          // Delete the reports belonging to this topic.
           if (topic.reports.length > 0) {
             await tx.report.deleteMany({
               where: { topicId: id },
             });
           }
 
-          // 4. Xóa topic
+          //  delete topic
           await tx.topic.delete({
             where: { id },
           });
 
-          // 5. Xóa cache
+          //  delete cache
           await this.deleteCacheByPrefix(`enrolled_topics:`);
           await this.deleteCacheByPrefix('topic:');
 
           return { message: 'Topic deleted successfully' };
         },
         {
-          // Mức cô lập RepeatableRead đủ cho việc xóa dữ liệu
-          // đảm bảo dữ liệu được đọc không bị thay đổi bởi các transaction khác
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
-          timeout: 5000, // 5 giây
+          timeout: 5000, // 5 sec
         },
       );
     } catch (error) {
-      // Xử lý lỗi transaction
+      // error transaction
       if (error.code === 'P2034') {
         throw new BadRequestException('Transaction timeout.');
       }

@@ -51,7 +51,7 @@ export class AuthController {
     }
   }
 
-  // @Auth('create_many_user')
+  @Auth('create_many_user')
   @Get('/register/bulk/template')
   getRegisterBulkTemplate(@Res() res: Response) {
     // Đường dẫn đến file template

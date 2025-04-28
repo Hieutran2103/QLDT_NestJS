@@ -37,28 +37,27 @@ export class CommentService {
     userId: string,
     createCommentDto: CreateCommentDto,
   ) {
-    // Tìm thông tin topic
+    // check info topic
     const topic = (await this.prisma.topic.findUnique({
       where: { id: topicId },
     })) as any;
 
     if (!topic) throw new NotFoundException('Topic not found.');
 
-    // Kiểm tra xem topic đã đóng chưa
+    // check topic's action is open?
     if (topic.action === 'close') {
       throw new ForbiddenException('Cannot create comment in a closed topic');
     }
 
-    // Kiểm tra người dùng có tham gia topic không
+    // check user in topic?
     await this.checkUserInTopicOrThrow(userId, topicId);
 
-    // Trích xuất dữ liệu
     const { content, parentId } = createCommentDto;
     let parentCommentId: string | null = null;
 
-    // Xử lý trường hợp trả lời comment nếu có parentId
+    // Handle the case of replying to a comment if there is a parentId.
     if (parentId) {
-      // Kiểm tra parent comment có tồn tại không và thuộc topic hiện tại
+      // Check if the parent comment exists and belongs to the current topic.
       const parentComment = await this.prisma.comment.findUnique({
         where: { id: parentId },
       });
@@ -76,7 +75,7 @@ export class CommentService {
       parentCommentId = parentId;
     }
 
-    // Tạo comment mới (hoặc reply)
+    // Create a new comment (or reply).
     return this.prisma.comment.create({
       data: {
         content,
@@ -104,14 +103,14 @@ export class CommentService {
       throw new NotFoundException('Comment not found.');
     }
 
-    // không cho tự sửa status của bản thân
+    // user cannot change their own status.
     if (comment.userId === userId) {
       throw new ForbiddenException(
         'You cannot update the status of your own comment.',
       );
     }
 
-    // kiểm tra xem user có trong topic không
+    // check user in topic?
     await this.checkUserInTopicOrThrow(userId, comment.topicId);
 
     return this.prisma.comment.update({
@@ -175,7 +174,7 @@ export class CommentService {
       if (!comment) {
         throw new NotFoundException('Comment not found.');
       }
-      // chỉ cho sửa comment của bản thân
+      // only edit their own comment
       if (comment.userId !== userId) {
         throw new ForbiddenException(
           'You do not have permission to edit this comment.',

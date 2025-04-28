@@ -34,7 +34,7 @@ export class ReportService {
       await (this.cacheManager.stores as any).del(keys);
     }
   }
-  // Check xem user có tham gia topic hay không
+  // Check  user in topic?
   private async checkUserInTopicOrThrow(userId: string, topicId: string) {
     const topicUser = await this.prisma.topicUser.findUnique({
       where: {
@@ -93,17 +93,16 @@ export class ReportService {
     createReportDto: CreateReportDto,
   ) {
     try {
-      // Kiểm tra trước khi bắt đầu transaction
       await this.checkUserInTopicOrThrow(userId, topicId);
 
       if (!createReportDto.fileUrl) {
         throw new BadRequestException('Missing uploaded file URL.');
       }
 
-      // Sử dụng transaction để đảm bảo tất cả các thao tác đều thành công hoặc thất bại cùng nhau
+      // Transaction
       return await this.prisma.$transaction(
         async (tx) => {
-          // Tạo report trong transaction
+          // create report
           const report = await tx.report.create({
             data: {
               topicId,
@@ -114,7 +113,7 @@ export class ReportService {
             },
           });
 
-          // Lấy thông tin topic trong transaction
+          // get info topic
           const topic = (await tx.topic.findUnique({
             where: { id: topicId },
             include: {
@@ -136,7 +135,7 @@ export class ReportService {
             );
           }
 
-          // Lấy thông tin người tạo report
+          // get info user
           const creator = await tx.user.findUnique({
             where: { id: userId },
             include: {
@@ -148,7 +147,7 @@ export class ReportService {
             throw new NotFoundException('User not found');
           }
 
-          // Gửi email thông báo - nằm ngoài transaction vì không liên quan đến DB
+          // send email
           await this.sendReportNotificationEmails(
             topic,
             creator,
@@ -156,14 +155,14 @@ export class ReportService {
             createReportDto,
           );
 
-          // Xóa cache
+          // Delete cache
           await this.deleteCacheByPrefix(KeyReport.REPORT);
 
           return report;
         },
         {
-          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-          timeout: 10000, // 10 giây
+          isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+          timeout: 10000,
         },
       );
     } catch (error) {
@@ -178,7 +177,7 @@ export class ReportService {
       const { page = 1, limit = 10, status } = query;
       const skip = (page - 1) * limit;
 
-      // Lấy thông tin user trước khi bắt đầu transaction
+      // get info user
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: { role: true },
@@ -203,13 +202,13 @@ export class ReportService {
         }
       }
 
-      // Nếu không phải admin, phải check tham gia topic
+      // if not admin, check user in topic
       if (!isAdmin) {
         await this.checkUserInTopicOrThrow(userId, topicId);
       }
 
-      // Sử dụng transaction để đảm bảo tính nhất quán khi đọc dữ liệu
-      // Điều này giúp tránh các vấn đề khi dữ liệu đang được thay đổi bởi request khác
+      //  transaction
+
       const [reports, totalItems] = await this.prisma.$transaction(
         [
           this.prisma.report.findMany({
@@ -232,8 +231,6 @@ export class ReportService {
           }),
         ],
         {
-          // Sử dụng mức cô lập ReadCommitted phù hợp cho truy vấn chỉ đọc
-          // ReadCommitted cho phép đọc dữ liệu đã được commit và không bị khóa bởi transaction khác
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
         },
       );
@@ -248,7 +245,7 @@ export class ReportService {
         totalItems,
       };
 
-      // Lưu vào cache theo logic gốc
+      // save cache
       await this.cacheManager.set(KeyReport.REPORT, result, 50000);
 
       return result;
@@ -261,8 +258,6 @@ export class ReportService {
 
   async update(id: string, userId: string, updateReportDto: UpdateReportDto) {
     try {
-      // Sử dụng transaction với isolation level là Serializable để ngăn chặn race condition
-      // Serializable đảm bảo các transaction không bị ảnh hưởng bởi các transaction khác đang chạy
       return await this.prisma.$transaction(
         async (tx) => {
           // Lấy thông tin user
@@ -275,8 +270,7 @@ export class ReportService {
             throw new ForbiddenException('User does not exist.');
           }
 
-          // Tìm report - với transaction này sẽ tạo ra lock ngầm định cho bản ghi
-          // ngăn chặn các thao tác update đồng thời từ người dùng khác
+          // find report
           const report = await tx.report.findUnique({
             where: { id },
             include: { topic: true },
@@ -286,7 +280,7 @@ export class ReportService {
             throw new NotFoundException('Report not found.');
           }
 
-          // Kiểm tra xem user có tham gia topic không
+          // check user in topic
           const topicUser = await tx.topicUser.findUnique({
             where: {
               topicId_userId: {
@@ -302,21 +296,19 @@ export class ReportService {
             );
           }
 
-          // Giáo viên được sửa tất cả nếu có tham gia topic
+          // teachers can edit everything if they are participating in the topic
           if (user.role.name === RoleEnum.TEACHER) {
-            // Xóa cache trước
-            await this.deleteCacheByPrefix(KeyReport.REPORT);
-
-            // Cập nhật report trong transaction
+            // edit report
             const updatedReport = await tx.report.update({
               where: { id },
               data: updateReportDto,
             });
-
+            // delete cache
+            await this.deleteCacheByPrefix(KeyReport.REPORT);
             return updatedReport;
           }
 
-          // Sinh viên chỉ được sửa nếu là chủ report
+          // students can only edit if they are the owner of the report.
           if (user.role.name === RoleEnum.STUDENT) {
             if (report.userId !== userId) {
               throw new ForbiddenException(
@@ -324,18 +316,15 @@ export class ReportService {
               );
             }
 
-            // Không cho sinh viên sửa status
+            // students cannot edit the status.
             if ('status' in updateReportDto) {
               throw new ForbiddenException(
                 'You are not allowed to change the report status.',
               );
             }
 
-            // Chỉ cho phép sửa filename và description
+            // just edit the filename and description.
             const { filename, description } = updateReportDto;
-
-            // Xóa cache trước
-            await this.deleteCacheByPrefix(KeyReport.REPORT);
 
             // Cập nhật report trong transaction
             const updatedReport = await tx.report.update({
@@ -345,20 +334,19 @@ export class ReportService {
                 description,
               },
             });
-
+            // delete cache
+            await this.deleteCacheByPrefix(KeyReport.REPORT);
             return updatedReport;
           }
 
-          // Nếu không phải giáo viên hoặc sinh viên
+          // if not  student or teacher
           throw new ForbiddenException(
             'You do not have permission to update reports.',
           );
         },
         {
-          // Mức cô lập Serializable đảm bảo tính nhất quán cao nhất
-          // nhưng có thể gây ra lỗi khi có nhiều người cùng cập nhật
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          timeout: 5000, // 5 giây
+          timeout: 5000,
         },
       );
     } catch (error) {
@@ -374,10 +362,10 @@ export class ReportService {
 
   async remove(id: string, userId: string) {
     try {
-      // Sử dụng transaction để đảm bảo tính nhất quán khi xóa report
+      // Transaction
       return await this.prisma.$transaction(
         async (tx) => {
-          // Lấy thông tin user
+          // get in4 user
           const user = await tx.user.findUnique({
             where: { id: userId },
             include: { role: true },
@@ -387,8 +375,6 @@ export class ReportService {
             throw new ForbiddenException('User does not exist.');
           }
 
-          // Tìm report để xóa - lock ngầm định sẽ được tạo ra
-          // ngăn chặn các thao tác khác trên report này
           const report = await tx.report.findUnique({
             where: { id },
           });
@@ -397,7 +383,7 @@ export class ReportService {
             throw new NotFoundException('Report not found.');
           }
 
-          // Kiểm tra xem user có tham gia topic không
+          // check user in topic
           const topicUser = await tx.topicUser.findUnique({
             where: {
               topicId_userId: {
@@ -413,18 +399,16 @@ export class ReportService {
             );
           }
 
-          // Giáo viên được xóa tất cả report nếu có tham gia topic
+          // Teachers can delete all reports if they are participating in the topic.
           if (user.role.name === RoleEnum.TEACHER) {
-            // Xóa report
             await tx.report.delete({ where: { id } });
 
-            // Xóa cache sau khi xóa report
             await this.deleteCacheByPrefix(KeyReport.REPORT);
 
             return { message: 'Report deleted successfully.' };
           }
 
-          // Sinh viên chỉ được xóa report của mình
+          // Students can only delete their own reports.
           if (user.role.name === RoleEnum.STUDENT) {
             if (report.userId !== userId) {
               throw new ForbiddenException(
@@ -432,29 +416,24 @@ export class ReportService {
               );
             }
 
-            // Xóa report
             await tx.report.delete({ where: { id } });
 
-            // Xóa cache sau khi xóa report
             await this.deleteCacheByPrefix(KeyReport.REPORT);
 
             return { message: 'Report deleted successfully.' };
           }
 
-          // Nếu không phải giáo viên hoặc sinh viên
           throw new ForbiddenException(
             'You do not have permission to delete reports.',
           );
         },
         {
-          // Mức cô lập RepeatableRead đủ cho việc xóa dữ liệu
-          // nó đảm bảo dữ liệu được đọc không bị thay đổi bởi các transaction khác
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
-          timeout: 5000, // 5 giây
+          timeout: 5000,
         },
       );
     } catch (error) {
-      // Xử lý lỗi transaction
+      //Error transaction
       if (error.code === 'P2034') {
         throw new BadRequestException('Transaction timeout.');
       }

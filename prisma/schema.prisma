@@ -84,6 +84,7 @@ model Report {
   id          String   @id @default(uuid())
   topicId     String
   userId      String
+
   description String
   filename    String
   status      Int

@@ -13,7 +13,7 @@ export class PermissionService {
 
   async create(createPermissionDto: CreatePermissionDto) {
     try {
-      // Kiểm tra nếu tên permission đã tồn tại
+      // check permission exist
       const existingPermission = await this.prismaService.permission.findFirst({
         where: { name: createPermissionDto.name },
       });
@@ -22,7 +22,7 @@ export class PermissionService {
         throw new BadRequestException('Permission name already exists');
       }
 
-      // Tạo permission mới
+      // create new
       return await this.prismaService.permission.create({
         data: createPermissionDto,
       });
@@ -63,7 +63,7 @@ export class PermissionService {
         throw new NotFoundException('Permission not found');
       }
 
-      // Biến đổi dữ liệu để trả về danh sách roles có quyền này
+     // transform the data to return a list of roles that have this permission.
       const roles = permission.rolePermissions.map((rp) => rp.role);
 
       return {
@@ -83,7 +83,7 @@ export class PermissionService {
 
   async update(id: string, updatePermissionDto: UpdatePermissionDto) {
     try {
-      // Kiểm tra permission tồn tại
+      // check permission exist
       const permission = await this.prismaService.permission.findUnique({
         where: { id },
       });
@@ -92,7 +92,7 @@ export class PermissionService {
         throw new NotFoundException('Permission not found');
       }
 
-      // Kiểm tra tên permission mới đã tồn tại chưa (nếu đang cập nhật tên)
+
       if (
         updatePermissionDto.name &&
         updatePermissionDto.name !== permission.name
@@ -110,7 +110,7 @@ export class PermissionService {
         }
       }
 
-      // Cập nhật permission
+      // update permission
       return await this.prismaService.permission.update({
         where: { id },
         data: updatePermissionDto,
@@ -130,7 +130,7 @@ export class PermissionService {
 
   async remove(id: string) {
     try {
-      // Kiểm tra permission tồn tại
+      //check permission exist
       const permission = await this.prismaService.permission.findUnique({
         where: { id },
       });
@@ -139,7 +139,7 @@ export class PermissionService {
         throw new NotFoundException('Permission not found');
       }
 
-      // Kiểm tra xem permission có đang được sử dụng bởi role nào không
+
       const rolePermissions = await this.prismaService.rolePermission.count({
         where: { permissionId: id },
       });
@@ -150,7 +150,7 @@ export class PermissionService {
         );
       }
 
-      // Xóa permission
+      // dele permission
       return await this.prismaService.permission.delete({
         where: { id },
       });

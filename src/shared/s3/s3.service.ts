@@ -38,14 +38,6 @@ export class S3Service {
       console.warn('AWS credentials or configuration missing or invalid');
     }
 
-    // console.log(
-    //   '=================',
-    //   accessKeyId,
-    //   secretAccessKey,
-    //   region,
-    //   endpoint,
-    // );
-
     this.s3Client = new S3Client({
       region,
       credentials: {

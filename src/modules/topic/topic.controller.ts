@@ -30,15 +30,12 @@ export class TopicController {
   @Post()
   create(@Body() createTopicDto: CreateTopicDto, @Req() request: Request) {
     const { id, roleId } = request[REQUEST_USER_KEY];
-    // console.log(id);
     return this.topicService.create(createTopicDto, id, roleId);
   }
 
   @Auth('get_all_topic')
   @Get('/get_all_topic')
   async findAll(@Query() query: FindAllTopicsDto) {
-    // console.log(query, '1234');
-
     return this.topicService.findAll(query);
   }
 
@@ -69,16 +66,12 @@ export class TopicController {
     @Req() request: Request,
   ) {
     const { id: userId } = request[REQUEST_USER_KEY];
-    // console.log(id);
-
     return this.topicService.editTopic(id, updateTopicDto, userId);
   }
 
   @Auth('delete_topic')
   @Delete('/:id')
   remove(@Param('id') id: string) {
-    // console.log(id);
-
     return this.topicService.remove(id);
   }
 }

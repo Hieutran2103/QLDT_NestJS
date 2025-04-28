@@ -3,14 +3,15 @@ import {
   ForbiddenException,
   Injectable,
   UnauthorizedException,
-  // UnprocessableEntityException,
 } from '@nestjs/common';
+
 import {
   BulkRegisterDto,
   LoginBodyDTO,
   RegisterExcelDto,
   RegisterUserDto,
 } from './dtos';
+
 import { PrismaService } from 'src/shared/services/prisma.service';
 
 import * as xlsx from 'xlsx';
@@ -67,7 +68,7 @@ export class AuthService {
 
   async registerUser(createUserDto: RegisterUserDto) {
     try {
-      // Kiểm tra email đã tồn tại chưa
+      // check email exist?
       const existingUser = await this.prismaService.user.findUnique({
         where: { email: createUserDto.email },
       });
@@ -81,7 +82,7 @@ export class AuthService {
         createUserDto.password,
       );
 
-      // Tạo user
+      // create user
       return await this.prismaService.user.create({
         data: {
           name: createUserDto.name,
@@ -97,14 +98,14 @@ export class AuthService {
 
   async registerManyUser(users: RegisterExcelDto[]) {
     try {
-      // sử dụng transaction để đảm bảo tất cả thao tác đăng ký người dùng
-      // được xử lý như một đơn vị giao dịch nhất quán
+      // Transaction
+
       return await this.prismaService.$transaction(
         async (tx) => {
-          // Kiểm tra các lỗi đầu vào
+          // check error
           const errors: string[] = [];
 
-          // Lấy tất cả role và email hiện có
+          // Get all role and email have had
           const [roles, existingUsers] = await Promise.all([
             tx.role.findMany({ select: { id: true } }),
             tx.user.findMany({
@@ -117,7 +118,7 @@ export class AuthService {
           const existingEmails = new Set(existingUsers.map((u) => u.email));
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-          // Kiểm tra tính hợp lệ của từng người dùng
+          // Validate
           const validUsers = users.filter((user, index) => {
             const row = index + 2;
 
@@ -139,7 +140,7 @@ export class AuthService {
             return true;
           });
 
-          // Nếu có lỗi, không đăng ký người dùng nào
+          // Error
           if (errors.length > 0) {
             throw new BadRequestException({
               message: 'Validation failed',
@@ -147,7 +148,7 @@ export class AuthService {
             });
           }
 
-          // Hash mật khẩu cho tất cả người dùng hợp lệ
+          // Hash password
           const hashedUsers = await Promise.all(
             validUsers.map(async (user) => ({
               ...user,
@@ -155,8 +156,7 @@ export class AuthService {
             })),
           );
 
-          // Tạo tất cả người dùng trong cùng một transaction
-          // Điều này đảm bảo tất cả người dùng được tạo hoặc không ai được tạo
+          // create many user
           const created = await tx.user.createMany({
             data: hashedUsers,
           });

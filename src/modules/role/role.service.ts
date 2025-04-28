@@ -13,7 +13,7 @@ export class RoleService {
 
   async create(createRoleDto: CreateRoleDto) {
     try {
-      // Kiểm tra nếu tên role đã tồn tại
+      // check role exist?
       const existingRole = await this.prismaService.role.findFirst({
         where: { name: createRoleDto.name },
       });
@@ -22,7 +22,7 @@ export class RoleService {
         throw new BadRequestException('Role name already exists');
       }
 
-      // Tạo role mới
+      // create new role
       return await this.prismaService.role.create({
         data: createRoleDto,
       });
@@ -59,7 +59,7 @@ export class RoleService {
         throw new NotFoundException('Role not found');
       }
 
-      // Biến đổi dữ liệu để trả về danh sách permissions
+      // transform the data to return a list of permissions.
       const permissions = role.rolePermissions.map((rp) => rp.permission);
 
       return {
@@ -77,7 +77,7 @@ export class RoleService {
 
   async update(id: string, updateRoleDto: UpdateRoleDto) {
     try {
-      // Kiểm tra role tồn tại
+      // check role exist
       const role = await this.prismaService.role.findUnique({
         where: { id },
       });
@@ -86,7 +86,6 @@ export class RoleService {
         throw new NotFoundException('Role not found');
       }
 
-      // Kiểm tra tên role mới đã tồn tại chưa (nếu đang cập nhật tên)
       if (updateRoleDto.name && updateRoleDto.name !== role.name) {
         const existingRole = await this.prismaService.role.findFirst({
           where: {
@@ -100,7 +99,7 @@ export class RoleService {
         }
       }
 
-      // Cập nhật role
+      // update role
       return await this.prismaService.role.update({
         where: { id },
         data: updateRoleDto,
@@ -118,7 +117,7 @@ export class RoleService {
 
   async remove(id: string) {
     try {
-      // Kiểm tra role tồn tại
+      // check role exist
       const role = await this.prismaService.role.findUnique({
         where: { id },
       });
@@ -127,7 +126,6 @@ export class RoleService {
         throw new NotFoundException('Role not found');
       }
 
-      // Kiểm tra xem role có đang được sử dụng bởi user nào không
       const usersWithRole = await this.prismaService.user.count({
         where: { roleId: id },
       });
@@ -138,12 +136,12 @@ export class RoleService {
         );
       }
 
-      // Xóa các rolePermission
+      // delete  rolePermission
       await this.prismaService.rolePermission.deleteMany({
         where: { roleId: id },
       });
 
-      // Xóa role
+      // delete role
       return await this.prismaService.role.delete({
         where: { id },
       });
@@ -160,7 +158,7 @@ export class RoleService {
 
   async assignPermissions(roleId: string, permissionIds: string[]) {
     try {
-      // Kiểm tra role tồn tại
+      //check role exist
       const role = await this.prismaService.role.findUnique({
         where: { id: roleId },
       });
@@ -169,7 +167,7 @@ export class RoleService {
         throw new NotFoundException('Role not found');
       }
 
-      // Kiểm tra các permission tồn tại
+      //check permission
       const permissions = await this.prismaService.permission.findMany({
         where: { id: { in: permissionIds } },
       });
@@ -178,9 +176,9 @@ export class RoleService {
         throw new BadRequestException('One or more permissions not found');
       }
 
-      // Sử dụng transaction để đảm bảo tính nhất quán
+      // Transaction
       return await this.prismaService.$transaction(async (tx) => {
-        // Lấy các rolePermission hiện tại
+        // get rolePermission
         const existingRolePermissions = await tx.rolePermission.findMany({
           where: { roleId },
           select: { permissionId: true },
@@ -189,12 +187,12 @@ export class RoleService {
           (rp) => rp.permissionId,
         );
 
-        // Chỉ thêm những permission chưa có
+        // Only add permissions that are not already present.
         const newPermissionIds = permissionIds.filter(
           (id) => !existingPermissionIds.includes(id),
         );
 
-        // Tạo các rolePermission mới
+        // create new rolePermission
         if (newPermissionIds.length > 0) {
           const rolePermissions = newPermissionIds.map((permissionId) => ({
             roleId,
@@ -206,7 +204,7 @@ export class RoleService {
           });
         }
 
-        // Trả về role với danh sách permissions đã cập nhật
+        // Return the role with the updated list of permissions.
         return this.findOne(roleId);
       });
     } catch (error) {
@@ -224,7 +222,7 @@ export class RoleService {
 
   async removePermissions(roleId: string, permissionIds: string[]) {
     try {
-      // Kiểm tra role tồn tại
+      // check role exist
       const role = await this.prismaService.role.findUnique({
         where: { id: roleId },
       });
@@ -233,7 +231,7 @@ export class RoleService {
         throw new NotFoundException('Role not found');
       }
 
-      // Kiểm tra các permission tồn tại
+      // Check if the permissions exist.
       const permissions = await this.prismaService.permission.findMany({
         where: { id: { in: permissionIds } },
       });
@@ -242,9 +240,9 @@ export class RoleService {
         throw new BadRequestException('One or more permissions not found');
       }
 
-      // Sử dụng transaction để đảm bảo tính nhất quán
+      // Transaction
       return await this.prismaService.$transaction(async (tx) => {
-        // Xóa các rolePermission được chỉ định
+        // delete the specified rolePermissions.
         await tx.rolePermission.deleteMany({
           where: {
             roleId,
@@ -252,7 +250,7 @@ export class RoleService {
           },
         });
 
-        // Trả về role với danh sách permissions đã cập nhật
+        // return the role with the updated list of permissions.
         return this.findOne(roleId);
       });
     } catch (error) {
