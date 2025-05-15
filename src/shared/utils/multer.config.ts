@@ -8,7 +8,7 @@ if (!fs.existsSync(uploadPath)) {
   fs.mkdirSync(uploadPath, { recursive: true });
 }
 
-// lưu tệp trữ trên hệ thống tệp
+
 export const multerConfig = {
   storage: multer.diskStorage({
     destination: uploadPath,
@@ -17,7 +17,7 @@ export const multerConfig = {
     },
   }),
 };
-// xóa tệp sau khi xử lý xong
+
 export const removeFile = (filePath: string) => {
   try {
     if (fs.existsSync(filePath)) {

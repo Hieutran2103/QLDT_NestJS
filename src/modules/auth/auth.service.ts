@@ -68,7 +68,7 @@ export class AuthService {
 
   async registerUser(createUserDto: RegisterUserDto) {
     try {
-      // check email exist?
+      // Check if email already exists
       const existingUser = await this.prismaService.user.findUnique({
         where: { email: createUserDto.email },
       });
@@ -82,7 +82,7 @@ export class AuthService {
         createUserDto.password,
       );
 
-      // create user
+      // Create user
       return await this.prismaService.user.create({
         data: {
           name: createUserDto.name,
@@ -98,14 +98,13 @@ export class AuthService {
 
   async registerManyUser(users: RegisterExcelDto[]) {
     try {
-      // Transaction
-
+      // Use transaction for bulk user registration
       return await this.prismaService.$transaction(
         async (tx) => {
-          // check error
+          // Collect errors
           const errors: string[] = [];
 
-          // Get all role and email have had
+          // Get all roles and existing emails
           const [roles, existingUsers] = await Promise.all([
             tx.role.findMany({ select: { id: true } }),
             tx.user.findMany({
@@ -118,7 +117,7 @@ export class AuthService {
           const existingEmails = new Set(existingUsers.map((u) => u.email));
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-          // Validate
+          // Validate users
           const validUsers = users.filter((user, index) => {
             const row = index + 2;
 
@@ -140,7 +139,7 @@ export class AuthService {
             return true;
           });
 
-          // Error
+          // Throw error if any validation failed
           if (errors.length > 0) {
             throw new BadRequestException({
               message: 'Validation failed',
@@ -148,7 +147,7 @@ export class AuthService {
             });
           }
 
-          // Hash password
+          // Hash passwords
           const hashedUsers = await Promise.all(
             validUsers.map(async (user) => ({
               ...user,
@@ -156,7 +155,7 @@ export class AuthService {
             })),
           );
 
-          // create many user
+          // Create many users
           const created = await tx.user.createMany({
             data: hashedUsers,
           });
@@ -167,21 +166,21 @@ export class AuthService {
           };
         },
         {
-          // dùng readCommitted để đảm bảo rằng transaction sẽ không bị lock bởi các transaction khác
+          // Use readCommitted to ensure transaction is not locked by others
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-          // mk cho tgian chờ cho transaction nếu quá thời gian này thì transaction sẽ bị hủy
-          timeout: 15000, // 15 giây
+          // Set timeout for transaction, after which it will be cancelled
+          timeout: 15000, // 15 seconds
         },
       );
     } catch (error) {
-      // Xử lý lỗi transaction
+      // Handle transaction errors
       if (error.code === 'P2034') {
         throw new BadRequestException(
           'Transaction timeout - too many users to register at once.',
         );
       }
 
-      // Trả về lỗi gốc nếu đã được xử lý ở trên
+      // Return original error if already handled above
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -198,7 +197,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Account does not exist');
+      throw new UnauthorizedException('Invalid credentials - user not found');
     }
 
     return this.generateTokens({

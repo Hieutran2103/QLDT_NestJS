@@ -8,74 +8,68 @@ datasource db {
 }
 
 model Role {
-  id    String @id @default(uuid())
-  name  String @unique
-
-  users           User[]
+  id              String           @id @default(uuid())
+  name            String           @unique
   rolePermissions RolePermission[]
+  users           User[]
 }
 
 model Permission {
-  id   String @id @default(uuid())
-  name String @unique
-
+  id              String           @id @default(uuid())
+  name            String           @unique
   rolePermissions RolePermission[]
 }
 
 model RolePermission {
-  id           String @id @default(uuid())
+  id           String     @id @default(uuid())
   roleId       String
   permissionId String
-
-  role       Role       @relation(fields: [roleId], references: [id])
-  permission Permission @relation(fields: [permissionId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
 
   @@unique([roleId, permissionId])
 }
 
 model User {
-  id         String   @id @default(uuid())
-  name       String
-  email      String   @unique
-  password   String
-  roleId     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  role          Role       @relation(fields: [roleId], references: [id])
-  topics        Topic[]    @relation("UserTopics")
-  teacherTopics Topic[]    @relation("TeacherTopics")
-  topicUsers    TopicUser[]
-  reports       Report[]
+  id            String      @id @default(uuid())
+  name          String
+  email         String      @unique
+  password      String
+  roleId        String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   comments      Comment[]
+  reports       Report[]
+  topics        Topic[]     @relation("UserTopics")
+  teacherTopics Topic[]     @relation("TeacherTopics")
+  topicUsers    TopicUser[]
+  role          Role        @relation(fields: [roleId], references: [id])
 }
 
 model Topic {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   name        String
   description String
   creatorId   String
   teacherId   String?
-  score       Float?   @default(0) // Điểm trên thang điểm 10
-  status      String   @default("inprocess") // inprocess, done.
-  action      String   @default("open") // open, close
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  creator    User        @relation("UserTopics", fields: [creatorId], references: [id])
-  teacher    User?       @relation("TeacherTopics", fields: [teacherId], references: [id])
-  topicUsers TopicUser[]
-  reports    Report[]
-  comments   Comment[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  action      String      @default("open")
+  score       Float?      @default(0)
+  status      String      @default("inprocess")
+  comments    Comment[]
+  reports     Report[]
+  creator     User        @relation("UserTopics", fields: [creatorId], references: [id])
+  teacher     User?       @relation("TeacherTopics", fields: [teacherId], references: [id])
+  topicUsers  TopicUser[]
 }
 
 model TopicUser {
   id      String @id @default(uuid())
   topicId String
   userId  String
-
-  topic Topic @relation(fields: [topicId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  topic   Topic  @relation(fields: [topicId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
 
   @@unique([topicId, userId])
 }
@@ -84,29 +78,26 @@ model Report {
   id          String   @id @default(uuid())
   topicId     String
   userId      String
-
   description String
   filename    String
   status      Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  topic Topic @relation(fields: [topicId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model Comment {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   topicId   String
   userId    String
   content   String
-  status    Int      @default(0) // 0: unresolved, 1: resolved
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   parentId  String?
-
-  topic   Topic    @relation(fields: [topicId], references: [id])
-  user    User     @relation(fields: [userId], references: [id])
-  parent  Comment? @relation("CommentReplies", fields: [parentId], references: [id])
-  replies Comment[] @relation("CommentReplies")
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  topic     Topic     @relation(fields: [topicId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
 }

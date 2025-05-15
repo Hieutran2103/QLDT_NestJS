@@ -53,13 +53,12 @@ export class AuthController {
 
   @Auth('create_many_user')
   @Get('/register/bulk/template')
-  getRegisterBulkTemplate(@Res() res: Response) {
-    // Đường dẫn đến file template
+  getRegisterBulkTemplate(@Res() res: Response): void {
+    // Path to the template file
     const templatePath = 'template_import_user/import_user.xlsx';
 
-    // Gửi file trực tiếp
+    // Send the file directly
     res.sendFile(templatePath, { root: './' });
-    return { message: 'File template sent successfully' };
   }
 
   @Auth('get_all_user')

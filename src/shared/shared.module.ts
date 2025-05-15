@@ -4,18 +4,23 @@ import { S3Module } from './s3/s3.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { MailModule } from './mail/mail.module';
 import * as redisStore from 'cache-manager-ioredis';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Global()
 @Module({
   providers: [PrismaService],
-  exports: [PrismaService, S3Module, MailModule],
+  exports: [PrismaService, S3Module, MailModule, CacheModule],
   imports: [
-    CacheModule.register({
+    CacheModule.registerAsync({
       isGlobal: true,
-      store: redisStore as any,
-      host: 'localhost',
-      port: 6379,
-      ttl: 600,
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        store: redisStore as any,
+        host: configService.get<string>('REDIS_HOST'),
+        port: configService.get<number>('REDIS_PORT'),
+        ttl: configService.get<number>('REDIS_TTL'),
+      }),
+      inject: [ConfigService],
     }),
     S3Module,
     MailModule,
